@@ -109,45 +109,32 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
                     current = start
                     step = 1
                     cutoff = 4 * pat_size  # max possible surface area for squares
-                    # the second condition actually does nothing as is because the edge-finding algo does not know friend from foe
-                    while (step <= pat_size - 1 || cells[current] > 0 || current in newcells) && step <= cutoff
+                    while (step <= pat_size - 1 || current in newcells) && step <= cutoff
                         step += 1
-                        neighs = GridIndex.([  (current.I[1], current.I[2] + 1)
-                                    (current.I[1] + 1, current.I[2] + 1)
-                                    (current.I[1] + 1, current.I[2])
-                                    (current.I[1] + 1, current.I[2] - 1)
-                                    (current.I[1], current.I[2] - 1)
-                                    (current.I[1] - 1, current.I[2] - 1)
-                                    (current.I[1] - 1, current.I[2])
-                                    (current.I[1] - 1, current.I[2] + 1)])
-                        done = false
-                        started = false
-                        # println(current)
-                        # println("neighs ", neighs, "\n")
-                        i = indexof(neighs, prev)
-                        while i <= 24  # 3 len neighs
-                            i += 1
-                            idx = i % 8 + 1  # increment idx cyclically
-                            if !started
-                                if !(neighs[idx] in pattern.coords)  # is the location part of my body
-                                    started = true
-                                end
-                            else
-                                if neighs[idx] in pattern.coords 
-                                    break  # we let current be the previous neighbor once we encounter a live cell
-                                end
-                            end
-                            current = neighs[idx]
-                        end
+                        prev, current = makestep(prev, current, pattern)
                     end
                     if step == cutoff + 1
-                        current = coord  # if you can't find anywhere to grow, fill the space where the cell that just died
+                        current = coord  # if you can't find anywhere to grow, fill the space of the cell the just died
                     end
                     new = current
                     tmp[coord] = 0
                     push!(newcells, new)
                     tmp[new] = AGE_MIN
                     push!(newcoords, new)
+                    if AGE_MIN <= cells[current] < AGE_CAP  # overwriting foreign cell
+                        popped = false  # TODO remove
+                        for p in patterns
+                            if current in p.coords
+                                pop!(p.coords, current)
+                                if popped
+                                    println("popped twice???")
+                                end
+                                popped = true
+                            end
+                        end
+                        tmp[coord] = 1
+                        push!(newcoords, coord)
+                    end
                     start = new
                 else
                     push!(newcoords, coord)
@@ -155,7 +142,7 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
             end
             updatecoords!(pattern, newcoords)
         else
-            prinln("DEAD PATTERN")
+            println("dead pattern")
         end
     end
     patterns, tmp, cells
@@ -170,6 +157,38 @@ function indexof(vec::Vector{T}, val::T) where T
     -1
 end
 
+function makestep(prev::GridIndex, current::GridIndex, pattern::Pattern)
+    neighs = GridIndex.([   (current.I[1], current.I[2] + 1)
+                            (current.I[1] + 1, current.I[2] + 1)
+                            (current.I[1] + 1, current.I[2])
+                            (current.I[1] + 1, current.I[2] - 1)
+                            (current.I[1], current.I[2] - 1)
+                            (current.I[1] - 1, current.I[2] - 1)
+                            (current.I[1] - 1, current.I[2])
+                            (current.I[1] - 1, current.I[2] + 1)])
+    done = false
+    started = false
+    # println(current)
+    # println("neighs ", neighs, "\n")
+    i = indexof(neighs, prev)
+    prev = current
+    while i <= 16  # 2 len neighs
+        i += 1
+        idx = i % 8 + 1  # increment idx cyclically
+        if !started
+            if !(neighs[idx] in pattern.coords)  # is the location part of my body
+                started = true
+            end
+        else
+            if neighs[idx] in pattern.coords 
+                break  # we let current be the previous neighbor once we encounter a live cell
+            end
+        end
+        current = neighs[idx]
+    end
+    prev, current
+end
+
 function updatecoords!(pattern::Pattern, coords::Set{GridIndex})
     for _ in 1:length(pattern.coords)
         pop!(pattern.coords)
@@ -181,7 +200,7 @@ end
 
 const AGE_MIN = 16
 const AGE_CAP = 32
-xdim, ydim = 150, 200
+xdim, ydim = 40, 60
 x = 1:xdim
 y = 1:ydim
 
