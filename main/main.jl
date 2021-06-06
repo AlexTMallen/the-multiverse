@@ -105,11 +105,12 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
             start = GridIndex(extremum.I[1], extremum.I[2] + 1)
             for coord in pattern.coords
                 if cells[coord] == AGE_CAP
+                    prev = extremum
                     current = start
                     step = 1
                     cutoff = 4 * pat_size  # max possible surface area for squares
                     # the second condition actually does nothing as is because the edge-finding algo does not know friend from foe
-                    while (step <= pat_size - 1 || cells[current] > 0 || current in newcells) && step <= cutoff  # TODO stepping needs to be a bit smarter to handle weird shapes
+                    while (step <= pat_size - 1 || cells[current] > 0 || current in newcells) && step <= cutoff
                         step += 1
                         neighs = GridIndex.([  (current.I[1], current.I[2] + 1)
                                     (current.I[1] + 1, current.I[2] + 1)
@@ -123,17 +124,17 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
                         started = false
                         # println(current)
                         # println("neighs ", neighs, "\n")
-                        i = 1
-                        while i <= 16
+                        i = indexof(neighs, prev)
+                        while i <= 24  # 3 len neighs
                             i += 1
                             idx = i % 8 + 1  # increment idx cyclically
                             if !started
-                                if cells[neighs[idx]] < 1  # is the cell empty
+                                if !(neighs[idx] in pattern.coords)  # is the location part of my body
                                     started = true
                                 end
                             else
-                                if cells[neighs[idx]] > 0  
-                                    break  # we update current to the previous neighbor once we encounter a live cell
+                                if neighs[idx] in pattern.coords 
+                                    break  # we let current be the previous neighbor once we encounter a live cell
                                 end
                             end
                             current = neighs[idx]
@@ -158,6 +159,15 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
         end
     end
     patterns, tmp, cells
+end
+
+function indexof(vec::Vector{T}, val::T) where T
+    for i in 1:length(vec)
+        if vec[i] == val
+            return i
+        end
+    end
+    -1
 end
 
 function updatecoords!(pattern::Pattern, coords::Set{GridIndex})
@@ -209,4 +219,4 @@ anim = @animate for i in 1:iterations
     patterns, cells, tmp = updategrid!(patterns, cells, tmp)
 end
 
-gif(anim, string("gifs\\", name, ".gif"), fps=15)
+gif(anim, string("gifs\\", name, ".gif"), fps=60)
