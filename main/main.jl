@@ -1,13 +1,16 @@
 using Base:Integer, UInt
 cd(@__DIR__)  # this sets the directory pointer to this file location
+cd("..")
 using Pkg  # Pkg.<command> is equivalent of `]` in command line julia
-Pkg.activate("..")  # this specifies the environment being used and activates it
+Pkg.activate(".")  # this specifies the environment being used and activates it
 
 using Plots
 # using TrackingHeaps
 using Random
-import Base.getindex, Base.size, Base.setindex!, Base.length, Base.+, Base.-, Base.*, Base.÷, Base.show, Base.print, Base.string, Base.println, Base.<, Base.>, Base.<=, Base.>=
+import Base.length
 using BenchmarkTools
+include("..\\utils\\ModularPlane.jl")
+using Main.ModularPlane
 
 """
 fundamentally in evolution every pattern (organism) needs a source of information (matter and energy) to succeed
@@ -25,60 +28,6 @@ fractal evolution (replication is at smaller scales)? Then info is exponential
 seed = 633
 Random.seed!(seed)
 
-# wraps numbers to stay between 1 <= y <= m
-modp1(x::Integer, m::Integer) = x < 1 ? m + x % m : 1 + (x - 1) % m
-
-"""
-modular integer
-where 1 <= val <= mod
-"""
-struct MInt <: Integer
-    val::UInt8
-    mod::UInt8
-    MInt(val, mod) = 1 <= val <= mod ? new(val, mod) : new(modp1(val, mod), mod)
-end
-
-getindex(A::Matrix, i1::MInt, i2::MInt) = A[i1.val, i2.val]
-function setindex!(A::Matrix, v::Number, i1::MInt, i2::MInt)
-    A[i1.val, i2.val] = v
-end
-+(a::MInt, b::Integer) = MInt(a.val + b, a.mod)
-+(b::Integer, a::MInt) = MInt(a.val + b, a.mod)
--(b::Integer, a::MInt) = MInt(b - a.val, a.mod)
--(a::MInt, b::Integer) = MInt(a.val - b, a.mod)
-*(a::MInt, b::Integer) = MInt(a.val * b, a.mod)
-*(b::Integer, a::MInt) = MInt(a.val * b, a.mod)
-÷(b::Integer, a::MInt) = MInt(b ÷ a.val, a.mod)
-÷(a::MInt, b::Integer) = MInt(a.val ÷ b, a.mod)
-<(a::MInt, b::Integer) = a.val < b
-<(b::Integer, a::MInt) = a.val > b
-<(a::MInt, b::MInt) = a.val > b.val
->(a::MInt, b::Integer) = a.val > b
->(b::Integer, a::MInt) = a.val < b
->(a::MInt, b::MInt) = a.val > b.val
-<=(a::MInt, b::Integer) = a.val <= b
-<=(b::Integer, a::MInt) = a.val >= b
-<=(a::MInt, b::MInt) = a.val <= b.val
->=(a::MInt, b::Integer) = a.val >= b
->=(b::Integer, a::MInt) = a.val <= b
->=(a::MInt, b::MInt) = a.val >= b.val
-
-show(io::IO, a::MInt) = print(io, a.val, "%", a.mod)
-
-"""
-matrix indexer whose indexing wraps
-"""
-struct GridIndex
-    I::Tuple{MInt, MInt}
-    GridIndex(x::MInt, y::MInt) = new(Tuple((x, y)))
-    GridIndex(tup::Tuple{MInt, MInt}) = new(tup)
-end
-
-getindex(A::Matrix, I::GridIndex) = A[I.I[1], I.I[2]]
-function setindex!(A::Matrix, v::Number, I::GridIndex)
-    A[I.I[1], I.I[2]] = v
-end
-
 struct Pattern
     coords::Set{GridIndex}
 end
@@ -91,7 +40,6 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
     xdim, ydim = size(cells)
     tmp .= (cells .> 0) .+ cells
     newcells = Set{GridIndex}()
-    println()
     println("sum ", sum(length.(patterns)))
     for pattern in patterns
         pat_size = length(pattern.coords)
@@ -142,7 +90,7 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
             end
             updatecoords!(pattern, newcoords)
         else
-            println("dead pattern")
+            # println("dead pattern")
         end
     end
     patterns, tmp, cells
@@ -198,9 +146,9 @@ function updatecoords!(pattern::Pattern, coords::Set{GridIndex})
     end
 end
 
-const AGE_MIN = 16
-const AGE_CAP = 32
-xdim, ydim = 40, 60
+const AGE_MIN = 2
+const AGE_CAP = 4
+xdim, ydim = 100, 140
 x = 1:xdim
 y = 1:ydim
 
@@ -210,9 +158,9 @@ pattern_locs = [GridIndex(MInt(i, xdim), MInt(j, ydim)) for i in 0:20:xdim - 1 f
 # pattern_locs = CartesianIndex.([(5, 10)])
 patterns = Set{Pattern}()
 for ploc in pattern_locs
-    xd = rand(1:20)
-    yd = rand(1:20)
-    n = rand(xd * yd ÷ 2 + 1:xd * yd)
+    xd = rand(1:12)
+    yd = rand(1:12)
+    n = rand((2xd * yd + 2) ÷ 3:xd * yd)
     possible_coords = Set{GridIndex}([GridIndex(i + ploc.I[1], j + ploc.I[2]) for i in 1:xd for j in 1:yd])
     coords = Set{GridIndex}(rand(possible_coords, n))
     push!(patterns, Pattern(coords))
