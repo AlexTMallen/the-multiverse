@@ -44,11 +44,12 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
     for pattern in patterns
         pat_size = length(pattern.coords)
         if pat_size > 0
+            pat_sum = sum(x -> cells[x], pattern.coords)
             newcoords = Set{GridIndex}()
-            if pat_size % 4 < 2
-                extremum = argmax(x -> x.I[pat_size % 2 + 1], pattern.coords)
+            if pat_sum % 4 < 2
+                extremum = argmax(x -> x.I[pat_sum % 2 + 1], pattern.coords)
             else
-                extremum = argmin(x -> x.I[pat_size % 2 + 1], pattern.coords)
+                extremum = argmin(x -> x.I[pat_sum % 2 + 1], pattern.coords)
             end
             start = GridIndex(extremum.I[1], extremum.I[2] + 1)
             for coord in pattern.coords
@@ -146,8 +147,8 @@ function updatecoords!(pattern::Pattern, coords::Set{GridIndex})
     end
 end
 
-const AGE_MIN = 2
-const AGE_CAP = 4
+const AGE_MIN = 4
+const AGE_CAP = 8
 xdim, ydim = 100, 140
 x = 1:xdim
 y = 1:ydim
@@ -186,4 +187,4 @@ anim = @animate for i in 1:iterations
     patterns, cells, tmp = updategrid!(patterns, cells, tmp)
 end
 
-gif(anim, string("gifs\\", name, ".gif"), fps=60)
+gif(anim, string("gifs\\", name, ".gif"), fps=15)
