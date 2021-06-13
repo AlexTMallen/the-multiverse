@@ -40,7 +40,7 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
     xdim, ydim = size(cells)
     tmp .= (cells .> 0) .+ cells
     newcells = Set{GridIndex}()
-    println("sum ", sum(length.(patterns)))
+    println("sum ", sum(length.(patterns)), " ", sum(cells .> 0))
     for pattern in patterns
         pat_size = length(pattern.coords)
         if pat_size > 0
@@ -58,7 +58,7 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
                     current = start
                     step = 1
                     cutoff = 4 * pat_size  # max possible surface area for squares
-                    while (step <= pat_size - 1 || current in newcells) && step <= cutoff
+                    while (step <= pat_size - 1 || cells[current] >= AGE_MIN || current in newcells) && step <= cutoff
                         step += 1
                         prev, current = makestep(prev, current, pattern)
                     end
@@ -70,20 +70,6 @@ function updategrid!(patterns::Set{Pattern}, cells::Matrix{Int8}, tmp::Matrix{In
                     push!(newcells, new)
                     tmp[new] = AGE_MIN
                     push!(newcoords, new)
-                    if AGE_MIN <= cells[current] < AGE_CAP  # overwriting foreign cell
-                        popped = false  # TODO remove
-                        for p in patterns
-                            if current in p.coords
-                                pop!(p.coords, current)
-                                if popped
-                                    println("popped twice???")
-                                end
-                                popped = true
-                            end
-                        end
-                        tmp[coord] = 1
-                        push!(newcoords, coord)
-                    end
                     start = new
                 else
                     push!(newcoords, coord)
@@ -174,7 +160,7 @@ for pattern in patterns
     end
 end
 
-iterations = 1000
+iterations = 500
 name = string("main ", xdim, "x", ydim, " seed=", seed, " iters=", iterations)
 tmp = similar(cells)
 bsize = 0
