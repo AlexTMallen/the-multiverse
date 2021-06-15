@@ -42,7 +42,9 @@ using BenchmarkTools
 seed = 633
 Random.seed!(seed)
 
-mutable struct NormalTree
+abstract type Tree end
+
+mutable struct NormalTree <: Tree
     id::Int32
     height::Int32
     growth_cost::Float32  # y
@@ -50,18 +52,18 @@ mutable struct NormalTree
     energy::Float32
 end
 
-mutable struct AltruisticTree
+mutable struct AltruisticTree <: Tree
     id::Int32
     height::Int32
+    donation_rate::Float32  # x
     growth_cost::Float32  # y
     growth_gain::Float32  # z
-    donation_rate::Float32  # x
     energy::Float32
 end
 
 modp1(x::Integer, m::Integer) = x < 1 ? m + x % m : 1 + (x - 1) % m
 
-function normal_animate!(trees::Vector{NormalTree}, grid::Matrix{Int32}, trees_cache::Vector{NormalTree}, generations::Int64, name::String)
+function both_animate!(trees::Vector{Tree}, grid::Matrix{Int32}, trees_cache::Vector{Tree}, generations::Int64, name::String)
     ydim, xdim = size(grid)
     avg_energies = Vector{Float32}()
     avg_heights = Vector{Float32}()
@@ -69,10 +71,16 @@ function normal_animate!(trees::Vector{NormalTree}, grid::Matrix{Int32}, trees_c
         # first update each tree's energy
         avg_energy = 0
         for i in 1:length(trees)
-            neigh = trees[modp1(i - 1, length(trees))]  # neighbor in the direction of the sun
+            neigh1, neigh2 = trees[modp1(i - 1, length(trees))], trees[modp1(i + 1, length(trees))]  # neighbor in the direction of the sun
             tree = trees[i]
-            tree.energy = tree.growth_gain * (tree.height - neigh.height) - tree.growth_cost * tree.height + 45 * tree.growth_gain            
+            tree.energy = tree.growth_gain * (tree.height - neigh1.height + 45) - tree.growth_cost * tree.height
+            if typeof(neigh2) === AltruisticTree
+                tree.energy += neigh2.donation_rate * (neigh2.height - tree.height)  # TODO this 45 ÷ 2 might need to be changed to avg_height or neigh2.height
+            end
             avg_energy += tree.energy
+            if tree.energy <= 0
+                println(tree.energy)
+            end
         end
         avg_energy = round(avg_energy / length(trees), digits=1)
         push!(avg_energies, avg_energy)
@@ -80,9 +88,9 @@ function normal_animate!(trees::Vector{NormalTree}, grid::Matrix{Int32}, trees_c
         avg_height = 0
         for i in 1:length(trees)
             # draw trees[i] onto current grid
-            # grid[2:trees[i].height + 1, 4 * (i - 1) + 2(gen % 2 + 1)] = i
+            # grid[2:trees[i].height + 1, 4 * (i - 1) + 2(gen % 2 + 1)] = trees[i].id
             grid[2:ydim - 4, 4 * (i - 1) + 2] .= 0
-            grid[2:trees[i].height + 1, 4 * (i - 1) + 2] .= trees[i].id + 10
+            grid[2:trees[i].height + 1, 4 * (i - 1) + 2] .= trees[i].id
             avg_height += trees[i].height
 
             # now update trees
@@ -96,7 +104,7 @@ function normal_animate!(trees::Vector{NormalTree}, grid::Matrix{Int32}, trees_c
         # plot
         heatmap(1:xdim, 1:ydim, grid,
                 colorbar=false, grid=false, ticks=false,
-                showaxis=false, title=string(gen, " ", avg_height, " normal; ", name), dpi=150)
+                showaxis=false, title=string(gen, " ", avg_height, " both; ", name), dpi=150)
     end
     anim, avg_energies, avg_heights
 end
@@ -104,28 +112,33 @@ end
 # 1 normal trees
 # 2 altruistic trees  (this by itself won't be interesting)
 # 3 normal vs altruistic trees
-x, y, z = 2, 3, 4
-num_trees = 100
+x, y, z = 1.5, 3, 4
+num_trees = 125
 xdim = 4 * num_trees
 ydim = 50
 grid = zeros(Int32, ydim, xdim)
-grid[1, :] .= -num_trees  # ground
+grid[1, :] .= -2 * num_trees  # ground
 grid[ydim - 3:ydim - 1, 2:2 + num_trees ÷ 7] .= 2 * num_trees  # sunshine!
-generations = 100
-name = string("gens=", generations, " trees=", num_trees, " x,y,z=", x, ",", y, ",", z)
-
-function normal_trees_init()
-    trees = Vector{NormalTree}()  # from l to r
+generations = 200
+ratio = 0
+name = string("gens=", generations, " trees=", num_trees, " x,y,z=", x, ",", y, ",", z, " ratio=", ratio)
+    
+function both_trees_init()
+    trees = Vector{Tree}()  # from l to r
     for i in 1:num_trees
         height = rand(10:20)
-        push!(trees, NormalTree(i, height, y, z, height * (y - z)))
+        if rand() < ratio
+            push!(trees, NormalTree(i + 10, height, y, z, 0))
+        else
+            push!(trees, AltruisticTree(-i - 10, height, x, y, z, 0))
+        end
     end
 
-    results = normal_animate!(trees, grid, similar(trees), generations, name)
-    results
+    results = both_animate!(trees, grid, similar(trees), generations, name)
+results
 end
 
-anim, avg_energies, avg_heights = normal_trees_init()    
+anim, avg_energies, avg_heights = both_trees_init()    
 gif(anim, string("gifs\\", name, ".gif"), fps=3)
 p = plot(avg_energies / maximum(avg_energies), lab="energy")
 plot!(p, avg_heights / maximum(avg_heights), lab="height", xaxis="time", legend=:top)
