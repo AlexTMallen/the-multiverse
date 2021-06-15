@@ -160,7 +160,7 @@ for pattern in patterns
     end
 end
 
-iterations = 500
+iterations = 50
 name = string("main ", xdim, "x", ydim, " seed=", seed, " iters=", iterations)
 tmp = similar(cells)
 bsize = 0
