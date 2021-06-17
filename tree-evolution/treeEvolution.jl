@@ -115,20 +115,21 @@ function both_animate!(trees::Vector{Tree}, grid::Matrix{Int32}, trees_cache::Ve
     anim, avg_energies, avg_heights
 end
 
-function continuous_time_evolve!(trees::Vector{Tree}, occ_idxs::Set{Int64}, free_idxs::Set{Int64}, generations::Int64, age_cap::Int64=100, spawnrate::Float64=0.01)
+function continuous_time_evolve!(trees::Vector{AltruisticTree}, occ_idxs::Set{Int64}, free_idxs::Set{Int64}, generations::Int64, age_cap::Int64=100, spawnrate::Float64=0.01)
     n = length(trees)
     avg_energies = Vector{Float32}()
     avg_heights = Vector{Float32}()
-    counts_normal = Vector{Int64}()
-    counts_alt = Vector{Int64}()
+    avg_xs = Vector{Float32}()
+    counts = Vector{Int64}()
 
         anim = @animate for gen in 1:generations
         heights = Vector{Float32}()
         energies = Vector{Float32}()
+        xs = Vector{Float32}()
         avg_height = 0
         avg_energy = 0
-        count_normal = 0
-        count_alt = 0
+        count = 0
+        avg_x = 0
         
         # update energies and ages
         for idx in occ_idxs
@@ -137,37 +138,36 @@ function continuous_time_evolve!(trees::Vector{Tree}, occ_idxs::Set{Int64}, free
             neigh_left = trees[idx_left]
             idx_right = get_right_neigh_idx(trees, occ_idxs, idx)
             neigh_right = trees[idx_right]
-            tree.energy = tree.growth_gain * (tree.height - neigh_left.height / (idx - idx_left)) - tree.growth_cost * tree.height
+            tree.energy = tree.growth_gain * (tree.height - neigh_left.height / (idx - idx_left) + 10) - tree.growth_cost * tree.height
             offset = 0  # diff between tree heights at which altruistic trees will start giving
-            if typeof(neigh_right) === AltruisticTree && neigh_right.height > tree.height + offset
+            if neigh_right.height > tree.height + offset
                 tree.energy += neigh_right.donation_rate * (neigh_right.height - tree.height + offset)  # TODO this 45 ÷ 2 might need to be changed to avg_height or neigh2.height
             end
-            if typeof(tree) == AltruisticTree
-                if tree.height > neigh_left.height + offset
-                    tree.energy -= tree.donation_rate * (tree.height - neigh_left.height + offset)  # TODO this 45 ÷ 2 might need to be changed to avg_height or neigh2.height
-                end
-                count_alt += 1
-            else
-                count_normal += 1
+            if tree.height > neigh_left.height + offset
+                tree.energy -= tree.donation_rate * (tree.height - neigh_left.height + offset)  # TODO this 45 ÷ 2 might need to be changed to avg_height or neigh2.height
             end
+            count += 1
             tree.age += 1
             push!(heights, tree.height)
+            push!(xs, tree.donation_rate)
             push!(energies, tree.energy)
             avg_height += tree.height
             avg_energy += tree.energy
+            avg_x += tree.donation_rate
         end
         
         avg_height = round(avg_height / length(occ_idxs), digits=1)
         push!(avg_heights, avg_height)
         avg_energy = round(avg_energy / length(occ_idxs), digits=1)
         push!(avg_energies, avg_energy)
-        push!(counts_normal, count_normal)
-        push!(counts_alt, count_alt)
+        avg_x = round(avg_x / length(occ_idxs), digits=2)
+        push!(avg_xs, avg_x)
+        push!(counts, count)
         
         print("correlation between height and energy: ")
         println(round(cor(heights, energies), digits=3))
         p1 = histogram(heights, bins=0:45, title=gen, xaxis="height")
-        p2 = histogram(energies, bins=0:45, title=gen, xaxis="energy")
+        p2 = histogram(xs, bins=0:0.1:3, title=gen, xaxis="donation rate (x)")
         plot(p1, p2)
 
         # birth and death
@@ -177,12 +177,9 @@ function continuous_time_evolve!(trees::Vector{Tree}, occ_idxs::Set{Int64}, free
                 pop!(occ_idxs, idx)
                 push!(free_idxs, idx)
             elseif length(free_idxs) > 0 && rand() < spawnrate * tree.energy  # birth
-                new_height = min(max(tree.height + rand(-1:1), 1), 45)
-                if typeof(tree) === NormalTree
-                    new_tree = NormalTree(tree.id, new_height, tree.growth_cost, tree.growth_gain, 0, 0)
-                else
-                    new_tree = AltruisticTree(tree.id, new_height, tree.donation_rate, tree.growth_cost, tree.growth_gain, 0, 0)
-                end
+                new_height = min(45, max(1, tree.height + rand(-1:1)))
+                new_x = max(0, tree.donation_rate + randn() / 10)
+                new_tree = AltruisticTree(tree.id, new_height, new_x, tree.growth_cost, tree.growth_gain, 0, 0)
                 new_idx = rand(free_idxs)
                 pop!(free_idxs, new_idx)
                 push!(occ_idxs, new_idx)
@@ -190,10 +187,10 @@ function continuous_time_evolve!(trees::Vector{Tree}, occ_idxs::Set{Int64}, free
             end
         end
     end
-    anim, avg_energies, avg_heights, counts_normal, counts_alt
+    anim, avg_energies, avg_heights, counts, avg_xs
 end
 
-function get_left_neigh_idx(trees::Vector{Tree}, occ_idxs::Set{Int64}, idx::Int64)
+function get_left_neigh_idx(trees::Vector{AltruisticTree}, occ_idxs::Set{Int64}, idx::Int64)
     curr = modp1(idx - 1, length(trees))
     while !(curr in occ_idxs)
         curr =  modp1(curr - 1, length(trees))
@@ -201,7 +198,7 @@ function get_left_neigh_idx(trees::Vector{Tree}, occ_idxs::Set{Int64}, idx::Int6
     curr
 end
 
-function get_right_neigh_idx(trees::Vector{Tree}, occ_idxs::Set{Int64}, idx::Int64)
+function get_right_neigh_idx(trees::Vector{AltruisticTree}, occ_idxs::Set{Int64}, idx::Int64)
     curr = modp1(idx + 1, length(trees))
     while !(curr in occ_idxs)
         curr =  modp1(curr + 1, length(trees))
@@ -213,18 +210,17 @@ end
 # 2 altruistic trees
 # 3 normal vs altruistic trees
 x, y, z = 1.5, 3, 4
-num_trees = 125
+num_trees = 200
 xdim = 4 * num_trees
 ydim = 50  # ⟹ 45 is max height
 grid = zeros(Int32, ydim, xdim)
 grid[1, :] .= -2 * num_trees  # ground
 grid[ydim - 3:ydim - 1, 2:2 + num_trees ÷ 7] .= 2 * num_trees  # sunshine!
-generations = 200
+generations = 1000
 age_cap = 100
-spawnrate = 0.5
-ratio = 0  # what proportion of trees are normal (not altruistic)
-name = string("gens=", generations, " trees=", num_trees, " x,y,z=", x, ",", y, ",", z, 
-              " ratio=", ratio, " sr=", spawnrate, " ac=", age_cap, " seed=", seed)
+spawnrate = 0.1
+name = string("gens=", generations, " trees=", num_trees, " x,y,z=", x, ",", y, ",", z,
+              " sr=", spawnrate, " ac=", age_cap, " seed=", seed)
     
 function both_trees_init()
     trees = Vector{Tree}()  # from l to r
@@ -241,29 +237,24 @@ function both_trees_init()
 end
 
 function continuous_time_init()
-    trees = Vector{Tree}(undef, 2 * num_trees)
+    trees = Vector{AltruisticTree}(undef, 2 * num_trees)
     perm = randperm(length(trees))
     idxs = Set(perm[1:num_trees])
     free_idxs = Set(perm[num_trees + 1:end])
     for i in idxs
         height = rand(10:20)
         age = rand(0:age_cap - 1)
-        if rand() < ratio
-            trees[i] = NormalTree(i + 10, height, y, z, 0, age)
-        else
-            trees[i] = AltruisticTree(-i - 10, height, x, y, z, 0, age)
-        end
+        trees[i] = AltruisticTree(-i - 10, height, max(x + randn(), 0), y, z, 0, age)
     end
     results = continuous_time_evolve!(trees, idxs, free_idxs, generations, age_cap, spawnrate)
     results
 end
 
-anim, avg_energies, avg_heights, counts_normal, counts_alt = continuous_time_init()    
-counts = counts_normal + counts_alt
+anim, avg_energies, avg_heights, counts, avg_xs = continuous_time_init()    
 g = gif(anim, string("gifs\\", name, ".gif"), fps=15)
-p = plot(counts_normal ./ counts, lab="% normal")
-plot!(p, counts_alt ./ counts, lab="% altruistic")
+p = plot(avg_xs, lab="x")
 plot!(p, counts ./ maximum(counts), lab="# trees")
-plot!(p, avg_heights ./ maximum(avg_heights), lab="height", xaxis="time", legend=:top, ylims=(0, 1))
+plot!(p, avg_energies ./ maximum(avg_energies), lab="energy/tree")
+plot!(p, avg_heights ./ maximum(avg_heights), lab="height", xaxis="time", legend=:top, ylims=(-0.1, maximum(avg_xs) + 0.1))
 savefig(p, string("gifs\\", name, ".png"))
 p
