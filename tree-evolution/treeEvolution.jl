@@ -1,4 +1,3 @@
-using Base:num_bit_chunks
 """ 
 Tree evolution
 Author: Alex Mallen (atmallen@uw.edu)
@@ -40,10 +39,10 @@ Pkg.activate(".")
 using Statistics
 using Plots
 using Random
-using BenchmarkTools
 
 seed = rand(1:1000)
 Random.seed!(seed)
+println(string("seed", seed))
 
 abstract type Tree end
 
@@ -239,7 +238,6 @@ function continuous_time_evolve_no_animate!(trees::Vector{AltruisticTree}, occ_i
     end
     heights, energies, xs, count
 end
-
 
 function get_left_neigh_idx(trees::Vector{AltruisticTree}, occ_idxs::Set{Int64}, idx::Int64)
     curr = modp1(idx - 1, length(trees))
