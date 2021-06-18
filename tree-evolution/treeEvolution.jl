@@ -116,7 +116,6 @@ function both_animate!(trees::Vector{Tree}, grid::Matrix{Int32}, trees_cache::Ve
 end
 
 function continuous_time_evolve!(trees::Vector{AltruisticTree}, occ_idxs::Set{Int64}, free_idxs::Set{Int64}, generations::Int64, age_cap::Int64=100, spawnrate::Float64=0.01)
-    n = length(trees)
     avg_energies = Vector{Float32}()
     avg_heights = Vector{Float32}()
     avg_xs = Vector{Float32}()
@@ -138,7 +137,7 @@ function continuous_time_evolve!(trees::Vector{AltruisticTree}, occ_idxs::Set{In
             neigh_left = trees[idx_left]
             idx_right = get_right_neigh_idx(trees, occ_idxs, idx)
             neigh_right = trees[idx_right]
-            tree.energy = tree.growth_gain * (tree.height - neigh_left.height / (idx - idx_left) + 10) - tree.growth_cost * tree.height
+            tree.energy = tree.growth_gain * (tree.height - neigh_left.height / modp1(idx - idx_left, length(trees)) + 10) - tree.growth_cost * tree.height
             offset = 0  # diff between tree heights at which altruistic trees will start giving
             if neigh_right.height > tree.height + offset
                 tree.energy += neigh_right.donation_rate * (neigh_right.height - tree.height + offset)  # TODO this 45 ÷ 2 might need to be changed to avg_height or neigh2.height
@@ -166,12 +165,15 @@ function continuous_time_evolve!(trees::Vector{AltruisticTree}, occ_idxs::Set{In
         
         print("correlation between height and energy: ")
         println(round(cor(heights, energies), digits=3))
-        p1 = histogram(heights, bins=0:45, title=gen, xaxis="height")
-        p2 = histogram(xs, bins=0:0.1:3, title=gen, xaxis="donation rate (x)")
-        plot(p1, p2)
+        print("between x and energy: ")
+        println(round(cor(xs, energies), digits=3))
+        p1 = histogram(heights, bins=0:2:46, title=gen, xaxis="height", ylims=(-0.1, length(trees) / 4))
+        p2 = histogram(xs, bins=0:0.2:5, title=gen, xaxis="donation rate (x)", ylims=(-0.1, length(trees) / 4))
+        p3 = histogram(energies, bins=-50:4:60, title=gen, xaxis="energy", ylims=(-0.1, length(trees) / 4))
+        plot(p1, p2, p3)
 
         # birth and death
-        for idx in occ_idxs  # concurrent modification seems to be ok
+        for idx in occ_idxs  # concurrent modification seems to be ok in this case
             tree = trees[idx]
             if tree.energy <= 0 || tree.age > age_cap  # death
                 pop!(occ_idxs, idx)
@@ -209,7 +211,7 @@ end
 # 1 normal trees
 # 2 altruistic trees
 # 3 normal vs altruistic trees
-x, y, z = 1.5, 3, 4
+x, y, z = 1, 3, 4
 num_trees = 200
 xdim = 4 * num_trees
 ydim = 50  # ⟹ 45 is max height
