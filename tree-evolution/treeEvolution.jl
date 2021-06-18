@@ -28,6 +28,8 @@ Trees are tall because they compete for light.
     of persisting long-term, and we assume that energy is a good proxy for this.
 
     (Is this green-beard altruism?) I don't think so because it doesn't distinguish like from unlike
+    The tree actually needs to shrink when it donates
+    The difference between economics and evolution is that capitalists are profit maximizing while genes are *relative* profit maximizing
 """
 
 cd(@__DIR__)
@@ -44,15 +46,6 @@ seed = rand(1:1000)
 Random.seed!(seed)
 
 abstract type Tree end
-
-mutable struct NormalTree <: Tree
-    id::Int32
-    height::Int32
-    growth_cost::Float32  # y
-    growth_gain::Float32  # z
-    energy::Float32
-    age::Int64
-end
 
 mutable struct AltruisticTree <: Tree
     id::Int32
@@ -203,12 +196,14 @@ function continuous_time_evolve_no_animate!(trees::Vector{AltruisticTree}, occ_i
             idx_right = get_right_neigh_idx(trees, occ_idxs, idx)
             neigh_right = trees[idx_right]
             tree.energy = tree.growth_gain * (tree.height - neigh_left.height / modp1(idx - idx_left, length(trees)) + 10) - tree.growth_cost * tree.height
-            offset = 0  # diff between tree heights at which altruistic trees will start giving
+            offset = 0  # diff between tree heights at which altruistic trees will start giving #TODO make this evolve
             if neigh_right.height > tree.height + offset
-                tree.energy += neigh_right.donation_rate * (neigh_right.height - tree.height + offset)  # TODO this 45 ÷ 2 might need to be changed to avg_height or neigh2.height
+                tree.energy += neigh_right.donation_rate * (neigh_right.height - tree.height + offset)
+                # TODO decrease this tree so that its trunk height is its neighbor's height
             end
             if tree.height > neigh_left.height + offset
-                tree.energy -= tree.donation_rate * (tree.height - neigh_left.height + offset)  # TODO this 45 ÷ 2 might need to be changed to avg_height or neigh2.height
+                tree.energy -= tree.donation_rate * (tree.height - neigh_left.height + offset)
+                # TODO decrease height of tree --I think this needs a trunk_height parameter
             end
             tree.age += 1
         end
@@ -272,7 +267,7 @@ ydim = 50  # ⟹ 45 is max height
 grid = zeros(Int32, ydim, xdim)
 grid[1, :] .= -2 * num_trees  # ground
 grid[ydim - 3:ydim - 1, 2:2 + num_trees ÷ 7] .= 2 * num_trees  # sunshine!
-generations = 100_000
+generations = 10_000
 age_cap = 100
 spawnrate = 0.1
 name = string("gens=", generations, " trees=", num_trees, " x,y,z=", x, ",", y, ",", z,
@@ -307,7 +302,7 @@ function continuous_time_init()
 end
     
 function init_test_x()
-    n_trials = 100
+    n_trials = 10
     n_quantiles = 5
     std = 0.1
     d = 1 / (n_quantiles + 1)
